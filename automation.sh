@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#!/bin/bash
+
 
 #======== if we have multile users and S3 bukcet we can use below approch instaed of hardcoded value of user_name and S3 bucket======
 #echo "Please Enter your Username:- "
@@ -7,46 +9,44 @@
 #echo "Please provide the S3 bucket name"
 #read S3_bucket
 #====================================================================================================================================
-my_name="rahulgs"
+my_name="gnshinde"
 S3_bucket="upgrad-rahulgs"
 
 #Update all packages details
 sudo apt update -y
 
-# check if apache2 package is installed or not 
+# check if apache2 package is installed or not
 
 INSTALLATION_STATUS=`dpkg --get-selections | grep apache |grep -v deinstall|grep install|wc -l`
 
 if [ ${INSTALLATION_STATUS} -ge 1 ]
-then 
-	echo  "Apache Packgae is  already installed "
+then
+        echo  "Apache Packgae is  already installed "
 
 else
-	echo "Started installing apache2 Package "
-	apt-get install apache2
+        echo "Started installing apache2 Package "
+        apt-get install apache2
 fi
 
-## check Apache Status 
+## check Apache Status
 
 APACHE2_SERVICE_STATUS=`ps -eaf |grep -i apache2 |wc -l`
 if [ ${APACHE2_SERVICE_STATUS} -ge 1 ]
 then
-	echo  "Apache service is up and Running fine"
+        echo  "Apache service is up and Running fine"
 else
-	echo  "Apache service is not running on server"
-	systemctl restart apache2
+        echo  "Apache service is not running on server"
 fi
 ## Checking status of APaches Service
-
 
 NEXT_BOOT_STATUS=`systemctl is-enabled apache2`
 
 if [ ${NEXT_BOOT_STATUS} == "enabled" ]
 then
-        echo  "Service is currently configured to start on the next boot up"
+	echo  "Service is currently configured to start on the next boot up"
 else
-        echo  "Enabling Apache2 service for next boot up"
-        systemctl enable apache2
+	echo  "Enabling Apache2 service for next boot up"
+	systemctl enable apache2
 
 fi
 
@@ -59,18 +59,37 @@ else
          systemctl restart apache2
 fi
 
-
-
-
 ##Creating tar file for all log files related to apache2 service
-echo  "Archiving Apache2 log files "
-timestamp=$(date '+%d%m%Y-%H%M%S')
+       echo  "Archiving Apache2 log files "
+       timestamp=$(date '+%d%m%Y-%H%M%S')
 
-tar -cvf ${my_name}-httpd-logs-${timestamp}.tar --absolute-names /var/log/apache2/*.log 
-mv  ${my_name}-httpd-logs-${timestamp}.tar /tmp
+       tar -cvf ${my_name}-httpd-logs-${timestamp}.tar --absolute-names /var/log/apache2/*.log
+       mv  ${my_name}-httpd-logs-${timestamp}.tar /tmp
 
 ##Uploading file inot S3 bucket
-echo  "Uploading file into S3 bucket"
-aws  s3   cp /tmp/${my_name}-httpd-logs-${timestamp}.tar  s3://${S3_bucket}/${my_name}-httpd-logs-${timestamp}.tar
+       echo  "Uploading file into S3 bucket"
+       aws  s3   cp /tmp/${my_name}-httpd-logs-${timestamp}.tar  s3://${S3_bucket}/${my_name}-httpd-logs-${timestamp}.tar
 
-#
+
+# Task 3
+
+
+if  [  -f  /var/www/html/inventory.html ]
+then
+          aws s3 ls  s3://${S3_bucket}/${my_name}-httpd-logs-${timestamp}.tar   --human-readable |awk  -v OFS='\t'  '{ "date +%Y%m%d-%H%M%S "| getline d; print "httpd-logs",d,"tar",$3"KB"} ' >>/var/www/html/inventory.html
+          echo  "record updated on web page for ${S3_bucket}/${my_name} `date`" >> /root/Automation_Project/log/output.log 
+
+  
+else
+	echo  "Creating new file to track archive data record" >> /root/Automation_Project/log/output.log
+        awk -v OFS='\t' 'BEGIN { printf "%s\t%s\t%s\t%s\n", "Log_Type", "Time_Created", "Type","Size"}' >/var/www/html/inventory.html
+        aws s3 ls  s3://${S3_bucket}/${my_name}-httpd-logs-${timestamp}.tar   --human-readable |awk  -v OFS='\t'  '{ "date +%Y%m%d-%H%M%S "| getline d; print "httpd-logs",d,"tar",$3"KB"} ' >>/var/www/html/inventory.html
+        echo  "record updated on web page ${S3_bucket}/${my_name} `date`" >> /root/Automation_Project/log/output.log
+fi
+
+# check cron file is exist of not, if it is doesn't exist then create it 
+# Note:- script will execute once in day at 1.30AM 
+if  [ ! -f  /etc/cron.d/automation ]
+then
+	echo "30 1 * * * root /root/Automation_Project/automation.sh" > /etc/cron.d/automation
+fi
